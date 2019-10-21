@@ -23,7 +23,7 @@ Python; pyTorch, matplotlib
 
 ## Output
 
-``
+```
 filtering records of the 10 most frequent genera:
 Pardosa        4121
 Tetragnatha    1049
@@ -65,4 +65,4 @@ epoch [18/20] - loss: 2.0344, eloss: 2.0928, acc: 0.2590, eacc: 0.2360
 epoch [19/20] - loss: 1.9616, eloss: 2.0431, acc: 0.2925, eacc: 0.2102
 
 epoch [20/20] - loss: 1.9492, eloss: 2.0252, acc: 0.2811, eacc: 0.2800
-``
+```
