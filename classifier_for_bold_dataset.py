@@ -264,9 +264,4 @@ for epoch_idx in range(N_EPOCHS):
 		maxaccuracy = mean_eval_accuracy
 		savemodel(mynetwork)
 
-	f=open("epoch.txt","w")
-	f.write(str(epoch_idx))
-	f.close()
-
-savemodel(mynetwork)
 savefigure(trainingprocess)
