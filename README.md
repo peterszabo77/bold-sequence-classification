@@ -63,6 +63,5 @@ epoch [16/20] - loss: 1.2865, eloss: 1.3001, acc: 0.4914, eacc: 0.5470
 epoch [17/20] - loss: 1.5978, eloss: 2.1256, acc: 0.4116, eacc: 0.2112
 epoch [18/20] - loss: 2.0344, eloss: 2.0928, acc: 0.2590, eacc: 0.2360
 epoch [19/20] - loss: 1.9616, eloss: 2.0431, acc: 0.2925, eacc: 0.2102
-
 epoch [20/20] - loss: 1.9492, eloss: 2.0252, acc: 0.2811, eacc: 0.2800
 ```
