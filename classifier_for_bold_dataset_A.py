@@ -135,11 +135,6 @@ class BoldDataset():
 # NETWORK
 
 class LSTMNetwork(nn.Module):
-	# input shape: (batchsize, seq_len, input_size)
-	# output (out, (h_n,c_n)) shape :  
-	# 	out: (seq_len, batch, num_directions * hidden_size) contains the output features (h_t) from the last layer of the LSTM, for each t
-	# 	hn: (batchsize, num_layers * num_directions, hidden_size) contains the hidden state for t = seq_len
-	# 	cn: (batchsize, num_layers * num_directions, hidden_size) contains the cell state for t = seq_len
 	def __init__(self):
 		super(LSTMNetwork,self).__init__()
 
@@ -153,6 +148,7 @@ class LSTMNetwork(nn.Module):
 		# 	out: (seq_len, batch, num_directions * hidden_size) contains the output features (h_t) from the last layer of the LSTM, for each t
 		# 	hn: (batchsize, num_layers * num_directions, hidden_size) contains the hidden state for t = seq_len
 		# 	cn: (batchsize, num_layers * num_directions, hidden_size) contains the cell state for t = seq_len
+		# output shape: (batchsize, num_of_classes)
 
 		out, (h_n, c_n) = self.lstm(x)
 		h_n = h_n.view(BATCHSIZE,-1) # (batchsize, num_layers * num_directions, hidden_size) -> (batchsize, hidden_size)
