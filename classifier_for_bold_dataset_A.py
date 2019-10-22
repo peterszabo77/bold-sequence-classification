@@ -145,7 +145,7 @@ class LSTMNetwork(nn.Module):
 	def forward(self,x, apply_softmax=False):
 		# input shape: (batchsize, seq_len, input_size)
 		# output (out, (h_n,c_n)) shape :
-		# 	out: (seq_len, batch, num_directions * hidden_size) contains the output features (h_t) from the last layer of the LSTM, for each t
+		# 	out: (batchsize, seq_len, num_directions * hidden_size) contains the output features (h_t) from the last layer of the LSTM, for each t
 		# 	hn: (batchsize, num_layers * num_directions, hidden_size) contains the hidden state for t = seq_len
 		# 	cn: (batchsize, num_layers * num_directions, hidden_size) contains the cell state for t = seq_len
 		# output shape: (batchsize, num_of_classes)
