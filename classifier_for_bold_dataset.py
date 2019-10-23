@@ -41,6 +41,9 @@ def seq_to_vector(seq):
 	result = np.stack(onehotlist)
 	return result
 
+def seq_to_idxvector(seq):
+	return torch.tensor([nucldict[nucl] for nucl in seq], dtype=torch.long)
+
 def set_seed_everywhere(seed, cuda):
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -113,7 +116,8 @@ class BoldDataset():
 		for g in self.genus_names:
 			genussample = self.train_data_by_genus[g].sample(self.genusbatchsize, replace = True)
 			for label, sequence in genussample.iterrows():
-				sequences.append(seq_to_vector(sequence[0]))
+				#sequences.append(seq_to_vector(sequence[0]))
+				sequences.append(seq_to_idxvector(sequence[0]))
 				labels.append(g)
 		batchtensor = torch.from_numpy(np.stack(sequences))
 		labelstensor = torch.tensor([self.genus_to_idx[e] for e in labels])
@@ -126,32 +130,53 @@ class BoldDataset():
 		for g in self.genus_names:
 			genussample = self.eval_data_by_genus[g].sample(self.genusbatchsize, replace = True)
 			for label, sequence in genussample.iterrows():
-				sequences.append(seq_to_vector(sequence[0]))
+				#sequences.append(seq_to_vector(sequence[0]))
+				sequences.append(seq_to_idxvector(sequence[0]))
 				labels.append(g)
 		batchtensor = torch.from_numpy(np.stack(sequences))
 		labelstensor = torch.tensor([self.genus_to_idx[e] for e in labels])
 		return batchtensor.to(device), labelstensor.to(device)
 
+	def get_evalrecord(self, g, idx, device):
+		# returns an array of shape (batchsize=1, seqlength, features)
+		sequence = self.eval_data_by_genus[g].iloc[idx,0]
+		batchtensor = torch.from_numpy(np.stack([seq_to_idxvector(sequence)]))
+		labelstensor = torch.tensor([self.genus_to_idx[g]])
+		return batchtensor.to(device), labelstensor.to(device)
+
 # NETWORK
 
 class LSTMNetwork(nn.Module):
+	# input shape: (batchsize, seq_len, input_size)
+	# output (out, (h_n,c_n)) shape :  
+	# 	out: (seq_len, batch, num_directions * hidden_size) contains the output features (h_t) from the last layer of the LSTM, for each t
+	# 	hn: (batchsize, num_layers * num_directions, hidden_size) contains the hidden state for t = seq_len
+	# 	cn: (batchsize, num_layers * num_directions, hidden_size) contains the cell state for t = seq_len
 	def __init__(self):
 		super(LSTMNetwork,self).__init__()
 
-		self.lstm = nn.LSTM(input_size=len(nucldict), hidden_size=N_HIDDEN, batch_first=True)
-		self.fc1 = nn.Linear(in_features=N_HIDDEN, out_features=N_HIDDEN)
-		self.fc2 = nn.Linear(in_features=N_HIDDEN, out_features=N_GENERA)
+		self.emb = nn.Embedding(num_embeddings=len(nucldict), embedding_dim=len(nucldict))
 
-	def forward(self,x, apply_softmax=False):
+		self.lstm = nn.LSTM(input_size=len(nucldict), hidden_size=N_HIDDEN, batch_first=True, bidirectional=True)
+		self.fc1 = nn.Linear(in_features=2*N_HIDDEN, out_features=2*N_HIDDEN)
+		self.fc2 = nn.Linear(in_features=2*N_HIDDEN, out_features=N_GENERA)
+
+	def forward(self, x, apply_softmax=False):
 		# input shape: (batchsize, seq_len, input_size)
-		# output (out, (h_n,c_n)) shape :
+		# LSTM output (out, (h_n,c_n)) shape :
 		# 	out: (batchsize, seq_len, num_directions * hidden_size) contains the output features (h_t) from the last layer of the LSTM, for each t
 		# 	hn: (batchsize, num_layers * num_directions, hidden_size) contains the hidden state for t = seq_len
 		# 	cn: (batchsize, num_layers * num_directions, hidden_size) contains the cell state for t = seq_len
 		# output shape: (batchsize, num_of_classes)
 
-		out, (h_n, c_n) = self.lstm(x)
-		h_n = h_n.view(BATCHSIZE,-1) # (batchsize, num_layers * num_directions, hidden_size) -> (batchsize, hidden_size)
+		batchsize = x.shape[0]
+
+		x_embedded = self.emb(x)
+
+		out, (h_n, c_n) = self.lstm(x_embedded)
+		h_n = h_n.permute(1,0,2).contiguous() # (num_layers * num_directions, batchsize, hidden_size) -> (batchsize, num_layers * num_directions, hidden_size)
+		h_n = h_n.view(batchsize,-1) # (batchsize, num_layers * num_directions, hidden_size) -> (batchsize, features)
+
 		fc1_out = F.leaky_relu(self.fc1(h_n))
 		fc2_out = self.fc2(fc1_out)
 
@@ -182,6 +207,32 @@ def savefigure(traindata):
 	plt.ylim(0, 1.0)
 	plt.legend(loc='upper left')
 	ax1.figure.savefig('training.pdf')
+
+def final_evaluation():
+	global mynetwork
+	mynetwork = loadmodel()
+	eval_df = pd.DataFrame(0, index=bolddataset.genus_names, columns=bolddataset.genus_names)
+	mynetwork.eval()
+	for g in bolddataset.genus_names:
+		g_idx = bolddataset.genus_to_idx[g]
+		for idx in range(bolddataset.eval_data_by_genus[g].shape[0]):
+			batch, labels = bolddataset.get_evalrecord(g,idx,mydevice)
+			pred = mynetwork(batch)
+			pred_idx = pred.max(dim=1)[1].item()
+			eval_df[g].iloc[pred_idx] += 1
+	genus_counts = eval_df.sum(axis=0)
+	eval_df = eval_df.div(genus_counts, axis=1)
+	fig = plt.figure()
+	ax1 = fig.add_subplot(1,1,1)
+	ims = ax1.imshow(eval_df.to_numpy(), cmap='Greens', vmin=0, vmax=1, origin='lower')
+	for idx, g in enumerate(bolddataset.genus_names):
+		ax1.text(idx, idx, '{:.2f}'.format(eval_df.iloc[idx][idx]), horizontalalignment='center', verticalalignment='center')
+	ax1.set_xticks([idx for idx in range(N_GENERA)])
+	ax1.set_xticklabels([g[:2] for g in bolddataset.genus_names])
+	ax1.set_yticks([idx for idx in range(N_GENERA)])
+	ax1.set_yticklabels([g[:2] for g in bolddataset.genus_names])
+	fig.colorbar(ims, ax=ax1)
+	ax1.figure.savefig('evaluation.pdf')
 
 bolddataset = BoldDataset()
 
@@ -235,7 +286,7 @@ for epoch_idx in range(N_EPOCHS):
 	mynetwork.eval()
 	for batch_idx in range(bolddataset.N_batches):
 		batch, label_idxs = bolddataset.get_evalbatch(BATCHSIZE, mydevice)
-		# the training routine is these 5 steps:
+		# evaluation routine is these 2 steps:
 		# --------------------------------------
 		# step 1. compute the output
 		pred = mynetwork(batch)
@@ -260,3 +311,6 @@ for epoch_idx in range(N_EPOCHS):
 		savemodel(mynetwork)
 
 savefigure(trainingprocess)
+
+print('\nfinal evaluation...')
+final_evaluation()
